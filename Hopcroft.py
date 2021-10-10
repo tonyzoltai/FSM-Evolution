@@ -26,23 +26,46 @@
 #     end;
 #end;
  
-Q = set(range(6))
-Sigma = set(range(2))
+Q = frozenset(range(6))
+Sigma = frozenset(range(2))
 delta = [[1, 2], [0, 3], [4, 5], [4, 5], [4, 5], [5, 5]]
 q0 = 0
-F = {2, 3, 4}
+F = frozenset({2, 3, 4})
  
 # Initialise the partition
-P = [Q, Q - F]
-W = [F]
+P = {Q, frozenset(Q - F)}
+W = {F}
  
 while len(W) > 0:
   A = W.pop()
+  print("outermost: ", A)
   for c in Sigma:
     # let X be the set of states for which a transition on c leads to a state in A
-    Y = []
-    for fstate in Q:
-        if delta[fstate][c] in A:
-          Y = Y + [fstate]
-    X = set(Y)
-    print (c, X)
+    X = frozenset({fstate for fstate in Q if delta[fstate][c] in A})
+    print ("outer: ",c, X)
+    # for each set Y in P for which X ∩ Y is nonempty and Y \ X is nonempty do
+    for Y in P:
+      inter = frozenset(X & Y)
+      diff = frozenset(Y - X)
+      if X != {} and Y != {}:
+        # replace Y in P by the two sets X ∩ Y and Y \ X  
+        P = P - frozenset({Y}) & frozenset({inter, diff})
+        # if Y is in W
+        if Y in W:
+          # replace Y in W by the same two sets
+          W = W - frozenset({Y}) & frozenset({inter, diff})
+        # else
+        else:
+          # if |X ∩ Y| <= |Y \ X|
+          if inter <= diff:
+            # add X ∩ Y to W
+            W = W & frozenset({inter})
+          # else
+          else:
+            # add Y \ X to W
+            W = W & frozenset({diff})
+      print("inner: ", Y, W)
+print("final: ", P)
+
+
+

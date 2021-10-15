@@ -1,3 +1,9 @@
+#TODO:
+# - Test with two other DFAs
+# - Find a case that does "add Y \ X to W"
+# - Refactor as function
+# - Create unit tests
+
 #https://www.programming-hero.com/code-playground/python/index.html
 #http://i.stanford.edu/pub/cstr/reports/cs/tr/71/190/CS-TR-71-190.pdf
  
@@ -47,9 +53,11 @@ while len(W) > 0:
     for Y in P:
       inter = frozenset(X & Y)
       diff = frozenset(Y - X)
-      if X != {} and Y != {}:
+      print("   inter: ", inter, "; diff: ", diff)
+      if inter != set() and diff != set():
         # replace Y in P by the two sets X ∩ Y and Y \ X  
-        P = P - frozenset({Y}) & frozenset({inter, diff})
+        P = P - frozenset({Y}) | frozenset({inter, diff})
+        print("   new P: ",P)
         # if Y is in W
         if Y in W:
           # replace Y in W by the same two sets
@@ -57,7 +65,7 @@ while len(W) > 0:
         # else
         else:
           # if |X ∩ Y| <= |Y \ X|
-          if inter <= diff:
+          if len(inter) <= len(diff):
             # add X ∩ Y to W
             W = W & frozenset({inter})
           # else

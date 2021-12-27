@@ -1,3 +1,8 @@
+#!//usr/bin/env python
+
+'''Tools to minimise Canonical Finite Automata. Includes Hopcroft's algorithm, 
+   as well as a slower, naive method.'''
+
 #TODO:
 # - Test with two other DFAs
 # - Find a case that does "add Y \ X to W"
@@ -37,43 +42,147 @@ Sigma = frozenset(range(2))
 delta = [[1, 2], [0, 3], [4, 5], [4, 5], [4, 5], [5, 5]]
 q0 = 0
 F = frozenset({2, 3, 4})
- 
-# Initialise the partition
-P = {Q, frozenset(Q - F)}
-W = {F}
- 
-while len(W) > 0:
-  A = W.pop()
-  print("outermost: ", A)
-  for c in Sigma:
-    # let X be the set of states for which a transition on c leads to a state in A
-    X = frozenset({fstate for fstate in Q if delta[fstate][c] in A})
-    print ("outer: ",c, X)
-    # for each set Y in P for which X ∩ Y is nonempty and Y \ X is nonempty do
-    for Y in P:
-      inter = frozenset(X & Y)
-      diff = frozenset(Y - X)
-      print("   inter: ", inter, "; diff: ", diff)
-      if inter != set() and diff != set():
-        # replace Y in P by the two sets X ∩ Y and Y \ X  
-        P = P - frozenset({Y}) | frozenset({inter, diff})
-        print("   new P: ",P)
-        # if Y is in W
-        if Y in W:
-          # replace Y in W by the same two sets
-          W = W - frozenset({Y}) & frozenset({inter, diff})
-        # else
-        else:
-          # if |X ∩ Y| <= |Y \ X|
-          if len(inter) <= len(diff):
-            # add X ∩ Y to W
-            W = W & frozenset({inter})
+
+# standard imports
+import itertools as it
+
+# our imports
+import semiautomata as sa
+import utilities as util
+
+
+
+#outmap = {s:0 for s in Q - F} | {s:1 for s in F}
+
+# print(semiaut.transitions)
+
+def naive_minimisation(semi_a):
+  '''Minimise the partitioned canonical semiautomaton semi_a  equivalent pair states.'''
+  # The main data structures are two sets of ordered pairs of states.
+  # One set collects all definitely non-equivalent states.
+  # The other holds those state pairs that stil may be equivalent.
+  # The algorithm keeps looping through the still potentially equivalent pairs.
+  # Each pair is examined whether there is at least one symbol that moves them to non-equivalent
+  # states.  If so, the pair is non-equivalent.
+  # The loop stops when there are no new non-equivalent pairs added.
+  # Finally, the still equivalent pairs are merged.
+
+  # Create the set of all pairs of states of the SA.
+  # TODO:
+  # 
+  states = range(semi_a.max_state + 1)
+  pairs = set()
+  for i in states:
+      for j in states[i + 1:]:
+        pairs.add((i,j))
+
+  # Move every pair of states where the two sides are in different partitions into the "non-equivalent" set.
+  non_equivalent = set()
+  refined = False
+  for i, j in list(pairs):
+    print("first loop ", i, j)
+    if semi_a.G(i) != semi_a.G(j):
+      # Two states having different outputs cannot be equivalent
+      print(i, j, "different output")
+      non_equivalent.add((i,j))
+      pairs.discard((i,j))
+      refined = True
+
+  # Repeat finding further non-equivalent states until you can't find any new ones.
+  while refined:
+    refined = False
+    for i, j in list(pairs):
+      # If any input maps the two states to states known not to be equivalent, then they are not equivalent.
+      for input, next_i in semi_a.alphabet_iterate(i):
+        next_j = semi_a.delta(j, input)
+        p = (next_i, next_j) if next_i < next_j else (next_j, next_i)
+        if p in non_equivalent:
+          print(i, j, "not equivalent")
+          non_equivalent.add((i,j))
+          pairs.discard((i,j))
+          refined = True
+  
+  # Construct the minimised CFA based on the set of state pairs that are equivalent.
+  new_cfa = sa.CanonicalSemiAutomaton()
+  
+
+
+  return pairs
+
+
+
+  #pairs = {(i,j) for  in it.product(enumerate(Q), repeat=2) if i < j}
+  
+
+
+
+def Hopcroft_minimisation(Q, Sigma, delta, q0, F):
+  # Initialise the partition
+  P = {Q, frozenset(Q - F)}
+  W = {F}
+  
+  while len(W) > 0:
+    A = W.pop()
+    print("outermost: ", A)
+    for c in Sigma:
+      # let X be the set of states for which a transition on c leads to a state in A
+      X = frozenset({fstate for fstate in Q if delta[fstate][c] in A})
+      print ("outer: ",c, X)
+      # for each set Y in P for which X ∩ Y is nonempty and Y \ X is nonempty do
+      for Y in P:
+        inter = frozenset(X & Y)
+        diff = frozenset(Y - X)
+        print("   inter: ", inter, "; diff: ", diff)
+        if inter != set() and diff != set():
+          # replace Y in P by the two sets X ∩ Y and Y \ X  
+          P = P - frozenset({Y}) | frozenset({inter, diff})
+          print("   new P: ",P)
+          # if Y is in W
+          if Y in W:
+            # replace Y in W by the same two sets
+            W = W - frozenset({Y}) & frozenset({inter, diff})
           # else
           else:
-            # add Y \ X to W
-            W = W & frozenset({diff})
-      print("inner: ", Y, W)
-print("final: ", P)
+            # if |X ∩ Y| <= |Y \ X|
+            if len(inter) <= len(diff):
+              # add X ∩ Y to W
+              W = W & frozenset({inter})
+            # else
+            else:
+              # add Y \ X to W
+              W = W & frozenset({diff})
+        print("inner: ", Y, W)
+  print("final: ", P)
+  return F
 
 
+# Unit testing code
+import unittest as ut
 
+class TestHopcroft(ut.TestCase):
+  def test_One(self):
+    semiaut = sa.CanonicalSemiAutomaton()
+
+    for state, trans in enumerate(delta):
+      for input, next in enumerate(trans):
+        semiaut.add_arc(state, input, next)
+
+    for state in F:
+      semiaut.outputs[state] = 1
+
+    util.pit(naive_minimisation(semiaut))
+
+  def test_Two(self):
+    cfa_string = ("0 0 1 5\n"
+                  "1 0 6 2\n"
+                  "2 1 0 2\n"
+                  "3 0 2 6\n"
+                  "4 0 7 5\n"
+                  "5 0 2 6\n"
+                  "6 0 6 4\n"
+                  "7 0 6 2\n")
+    cfa = sa.CanonicalSemiAutomaton.from_string(cfa_string)
+    util.pit(naive_minimisation(cfa))
+
+if __name__ == '__main__':
+  ut.main()

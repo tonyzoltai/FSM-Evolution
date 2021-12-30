@@ -2,6 +2,7 @@
 
 ''''Generally useful things.'''
 
+
 def pit(iterator, n = None):
     for i, j in enumerate(iterator):
         print(i, j)

@@ -68,7 +68,7 @@ class Run(object):
         '''Initialise a run with an automaton and a start state.'''
         super().__init__()
         self.automaton = automaton
-        self.state = start
+        self.restart(start)
 
     def __repr__(self) -> str:
         return "Current State: " + repr(self.state) + " (automaton object id: " + str(id(self.automaton)) + ")"
@@ -81,6 +81,9 @@ class Run(object):
         '''Process a sequence of inputs.'''
         for i in inputs:
             self.step(i)
+    
+    def restart(self, start = 0):
+        self.state = start
 
 
 class CanonicalMooreMachine(CanonicalSemiAutomaton):
@@ -173,6 +176,8 @@ class TestCSA(ut.TestCase):
         self.assertEqual(r.automaton.outputs[r.state], 1)
         d = repr(r)
         self.assertIsInstance(d, str)
+        r.restart(1)
+        self.assertEqual(r.automaton.outputs[r.state], 0)
 
 
 if __name__ == '__main__':

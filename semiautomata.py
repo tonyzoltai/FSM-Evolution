@@ -19,8 +19,22 @@ starting state or outputs based on state (e.g. a subset of "accepting" states).
 # and m being the number of states and input symbols respectively.
 
 
+import random
+import string
+import copy
 
-import itertools as it
+
+#Utilities
+
+def readable_symbol(n, alphabet = string.ascii_lowercase):
+    '''Translate the an integer from 0,1,... into a,b,...,z,aa,ab,... or similar alphabets for human consumption of states and symbols.'''
+    if n < len(alphabet):
+        return alphabet[n]
+    else:
+        return readable_symbol((n // len(alphabet)) - 1, alphabet) + alphabet[n % len(alphabet)]
+
+
+#The actual classes.
 
 class CanonicalSemiAutomaton(object):
     '''A canonicalised semiautomaton, with unsigned ints for states and inputs.'''
@@ -30,6 +44,9 @@ class CanonicalSemiAutomaton(object):
         self.max_input = 0
         self.transitions = {0:{0:0}}
     
+    def deepcopy(self):
+        return copy.deepcopy(self)
+
     def add_arc(self, state, input, next):
         '''Add an arc from state on input to next.'''
         self.max_state = max(self.max_state, state, next)
@@ -82,17 +99,37 @@ class Run(object):
         for i in inputs:
             self.step(i)
     
+    def runstring(self, inputs):
+        '''Process the input from the starting state, return the final output.'''
+        self.restart()
+        self.multistep(inputs)
+        return self.automaton.G(self.state)
+    
     def restart(self, start = 0):
         self.state = start
 
 
 class CanonicalMooreMachine(CanonicalSemiAutomaton):
-    '''Moore machines are automata with finite states, and each state having an output symbol from an output alphabet.'''
-    def __init__(self):
+    '''Moore machines are automata with finite states, and each state having an output symbol from an output alphabet.
+        This class also has a "mutate" method, which needs pre-set in- and output alphabets.'''
+
+    # Default alphabets are binary, i.e. the max canonical value of in- and output are 1.
+    def __init__(self, max_input = 1, max_output = 1):
         '''Initialise the Moore machine as a one-state semiautomaton, with zero as the output.'''
+
+        # Start with the parent class initialisation
         super().__init__()
+
+        # The maximum inputs and outputs (i.e. size of alphabet - 1) needs to be set for the "mutate" method.
+        self.max_input = max_input
+        self.max_output = max_output
+
+        # Initialise the bits of data we carry over and above the parent class.
         self.start = 0
-        self.outputs = {0:0}
+        self.outputs = dict()
+        self.set_output(0,0)
+
+
 
     def __repr__(self) -> str:
         '''Return an unambiguous string representation.'''
@@ -102,6 +139,11 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton):
 
     def set_output(self, state, output):
         '''Set the output of a state to a value.'''
+
+        # If a new output value is added, expand the range
+        if output > self.max_output:
+            self.max_output = output
+
         self.outputs[state] = output
     
     def G(self, state):
@@ -111,6 +153,37 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton):
         else:
             # If not specified, the output is zero by default.
             return 0
+    
+    def deepcopy(self):
+        return copy.deepcopy(self)
+
+    def mutate(self):
+        # Change one arc in the auomaton to a random destination, wihch could expand the state space.
+        # So, a mutation operator can take an arc from an existing state, point it to a random state, and assign a random output to that state (and the state may be new).
+        # Choose a target state for the mutated arc, which could be a new state being added.
+        target_state = random.randint(0,self.max_state + 1)
+
+        # If the state is new, give it a random output.
+        if target_state > self.max_state:
+            self.set_output(target_state, random.randint(0, self.max_output))
+        
+        # Set the arc from a random existing state to the target state.
+        self.add_arc(random.randint(0,self.max_state), random.randint(0,self.max_input), target_state)
+   
+    def display(self, inputs=string.ascii_lowercase, states=string.ascii_uppercase, outputs=["REJECT","ACCEPT","THIRD","FOURTH"]):
+        print()
+        print("State |Output|", end="")
+        for a in range(self.max_input + 1):
+            print(f"{readable_symbol(a,inputs):>7}", end="")
+        print()
+        print("-" * 7 * (self.max_input + 3))
+        for s in range(self.max_state + 1):
+            print(f"{readable_symbol(s,states):>6}|", end="")
+            print(f"{readable_symbol(self.G(s),outputs):>6}|", end="")
+            for a in range(self.max_input + 1):
+                print(f"{readable_symbol(self.delta(s, a),states):>7}", end="")
+            print()
+
 
     @classmethod
     def from_string(cls, s):
@@ -142,14 +215,14 @@ class TestCSA(ut.TestCase):
         self.assertEqual(a.outputs[0], 0)
 
     def test_add_arc(self):
-        a = CanonicalSemiAutomaton()
+        a = CanonicalMooreMachine()
         a.add_arc(0, 7, 8)
         self.assertEqual(a.max_input, 7)
         self.assertEqual(a.max_state, 8)
         self.assertEqual(a.delta(0, 7), 8)
 
     def test_iterate(self):
-        a = CanonicalSemiAutomaton()
+        a = CanonicalMooreMachine()
         a.add_arc(0, 7, 8)
         a.add_arc(0, 3, 5)
         iter = dict(list(a.alphabet_iterate(0)))
@@ -179,6 +252,28 @@ class TestCSA(ut.TestCase):
         r.restart(1)
         self.assertEqual(r.automaton.outputs[r.state], 0)
 
+    def test_mutate(self):
+        random.seed(a=0, version=2)
+        a = CanonicalMooreMachine()
+        a.mutate()
+        a.mutate()
+        #a.display()
+        self.assertEqual(a.max_state,2)
+        self.assertEqual(a.delta(1, 0), 0)
+
+    def test_copy(self):
+        random.seed(a=0, version=2)
+        m1 = CanonicalMooreMachine.from_string(("0 1 2 1\n"
+         "1 0 0 2\n"
+         "2 0 2 2"))
+        m2 = m1.deepcopy()
+        m2.mutate()
+        m2.mutate()
+        #m1.display()
+        #m2.display()
+        self.assertEqual(m2.max_state,4)
+        self.assertEqual(m2.delta(0, 1), 3)
+        self.assertEqual(m1.delta(0, 1), 1)
 
 if __name__ == '__main__':
     ut.main()

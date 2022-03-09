@@ -9,7 +9,6 @@ import random
 import string
 import semiautomata as sa
 import countable
-import utilities
 import FSMScorer
 import NaidooRefLanguages as Naidoo
 
@@ -134,87 +133,139 @@ while not stop:
             display(m)
             print("Score:", s, "of", optimal)
     elif cmd == "V":
-        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
-        # Initialise first propagators from the current machine
-        propagators = []
-        for i in range(propagator_count):
-            m = automaton.deepcopy()
-            propagators.append(m)
-        
-        # Loop through generations until user exits
+
+        scoring_strings = list(itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
+        max_score = len(scoring_strings)
+        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,scoring_strings)
+
+        print("Maximal score:", max_score)
+
+        # Initialise the parent of the starting generation
+        parents = [automaton]
+        parent_weights = [1]
+
         for g in itertools.count():
             print("Generation", g)
             population = []
 
-            # initialise the new generation from the propagators
-            for p in propagators:
-                population.append(p)    # the propagator survives
-                for j in range(offspring_per_propagator - 1):
-                    # create offspring by mutation
-                    m = p.deepcopy()
-                    m.mutate()
-                    population.append(m)
+            # initialise the child generation
+            children = []
+            children_weights = []
 
-            # score and select the next propagators
-            # propagators = []
-            # threshold = 0
+            # add as many children of weighted-randomly-chosen parents as the population calls for
+            for parent in random.choices(parents, weights=parent_weights, k=population_size):
+                # reproduce the parent
+                child = parent.deepcopy()
 
-            population.sort(reverse=True, key=lambda m: scorer.score(m)[0])
+                # mutate the child
+                child.mutate()
 
-            print("Population size:", len(population))
+                # score the child
+                (score, _) = scorer.score(child)
 
-            #for u in population:
-            #    print(scorer.score(u))
-            #    display(u)
+                # add the child to the new generation list
+                children.append(child)
 
-            propagators = population[0:propagator_count]
-            #propagators = [population[0]]
+                # accumulate the scores into a weights list
+                children_weights.append(score)
+
+            print("Best Score:", max(children_weights))
+            cmd = input("<enter> for next generation >")
+            if cmd != "":
+                break
+            else:
+                parents = children
+                parent_weights = children_weights
+
+
+
+
+
+
+
+        # # Initialise population zero from the current machine
+        # propagators = [(1,automaton)]
+        # for i in range(propagator_count):
+        #     m = automaton.deepcopy()
+        #     propagators.append((1,m))
+        
+        # # Loop through generations until user exits
+        # for g in itertools.count():
+        #     print("Generation", g)
+        #     population = []
+
+        #     # initialise the new generation from the propagators
+        #     for p in propagators:
+        #         population.append(p)    # the propagator survives
+        #         for j in range(offspring_per_propagator - 1):
+        #             # create offspring by mutation
+        #             m = p.deepcopy()
+        #             m.mutate()
+        #             population.append(m)
+
+        #     # score and select the next propagators
+        #     # propagators = []
+        #     # threshold = 0
+
+        #     population.sort(reverse=True, key=lambda m: scorer.score(m)[0])
+
+        #     print("Population size:", len(population))
+
+        #     #for u in population:
+        #     #    print(scorer.score(u))
+        #     #    display(u)
+
+        #     propagators = population[0:propagator_count]
+        #     #propagators = [population[0]]
             
-            print(len(propagators))
+        #     print(len(propagators))
 
-            print("Best Score:", scorer.score(propagators[0]))
+        #     print("Best Score:", scorer.score(propagators[0]))
 
-            """
-            for m in population:
-                s,optimal = scorer.score(m)
-                if s == optimal:
-                    print("#######################################################################Perfect score")
+        #     """
+        #     for m in population:
+        #         s,optimal = scorer.score(m)
+        #         if s == optimal:
+        #             print("#######################################################################Perfect score")
 
-                # Threshold Free sl.    Add Update T
-                #   0       0           0   0
-                #   0       1           1   0
-                #   1       0           1   1
-                #   1       1           1   1
+        #         # Threshold Free sl.    Add Update T
+        #         #   0       0           0   0
+        #         #   0       1           1   0
+        #         #   1       0           1   1
+        #         #   1       1           1   1
 
-                if len(propagators) < propagator_count:
-                    # admit the individual, there is a free propagator slot
-                    propagators.append(m)
-                elif s > threshold:
-                    propagators.append(m)
-                    propagators.sort()
+        #         if len(propagators) < propagator_count:
+        #             # admit the individual, there is a free propagator slot
+        #             propagators.append(m)
+        #         elif s > threshold:
+        #             propagators.append(m)
+        #             propagators.sort()
 
-                # Pull the threshold up if it has been exceeded
-                if s > threshold:
-                        threshold = s
+        #         # Pull the threshold up if it has been exceeded
+        #         if s > threshold:
+        #                 threshold = s
 
                         
 
 
-            best = 0
-            for m in population:
-                s,optimal = scorer.score(m)
-                if s == optimal:
-                    print("#######################################################################Perfect score")
-                if s >= best:   # use a later one of two equally scoring machines, to allow new neutral mutants to replace parents
-                    best = s
-                    propagators = m.deepcopy()
-            print("Selected machine had score", best)
-            """
+        #     best = 0
+        #     for m in population:
+        #         s,optimal = scorer.score(m)
+        #         if s == optimal:
+        #             print("#######################################################################Perfect score")
+        #         if s >= best:   # use a later one of two equally scoring machines, to allow new neutral mutants to replace parents
+        #             best = s
+        #             propagators = m.deepcopy()
+        #     print("Selected machine had score", best)
+        #     """
 
-            cmd = input("<enter> for next generation >")
-            if cmd != "":
-                break
-        automaton = propagators [0]
+        #     cmd = input("<enter> for next generation >")
+        #     if cmd != "":
+        #         break
+        # automaton = propagators [0]
+
+        # Set the current machine to be the first child that achieved the best score in the latest generation
+        automaton = max(enumerate(children), key=lambda o: children_weights[o[0]])[1]
         display(automaton)
     elif cmd == "F":
         s = ""

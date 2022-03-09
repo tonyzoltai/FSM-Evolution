@@ -28,7 +28,7 @@ def twoD(m):
             yield (x,y)
 
 def ND(n, m):
-    '''Generate all n-length lists of N0 numbers no higher than m.'''
+    '''Generate all n-length lists of N0 numbers less than m.'''
     return it.product(range(m),repeat = n)
 
 def nat_tuples():
@@ -36,12 +36,16 @@ def nat_tuples():
     return it.chain.from_iterable(map(lambda n: it.product(range(n), repeat=n),it.count()))
 
 def all_words_from_alphabet(a):
-    '''Generate all strings containing no characters outside of the set a.'''
-    return it.chain.from_iterable(map(lambda n: map("".join,it.product(a, repeat=n)),it.count()))
+    '''Generate all sequences of items from the given set/alphabet, which can be any iterable.'''
+    return it.chain.from_iterable(map(lambda n: it.product(a, repeat=n), it.count()))
+
+def all_concatenations_from_strings(a):
+    '''Generate all concatenations of the strings yielded by iterable a.'''
+    return map(lambda i: "".join(i), all_words_from_alphabet(a))
 
         
-gen = all_words_from_alphabet({'a','b','c'})
+#gen = all_concatenations_from_strings({'a','b','c'})
 
-for i in zip(it.count(),it.islice(gen,30)):
-    print(i)
+#for i in it.islice(zip(it.count(), gen), 30):
+#    print(i)
 

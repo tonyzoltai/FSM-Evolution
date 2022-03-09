@@ -11,6 +11,7 @@ import semiautomata as sa
 import countable
 import utilities
 import FSMScorer
+import NaidooRefLanguages as Naidoo
 
 
 input_map = string.ascii_lowercase
@@ -21,15 +22,17 @@ def display(a):
     a.display(inputs=input_map, states=states_map, outputs=output_map)
 
 
-l1 =   ("0 1 0 1\n"
-        "1 0 1 0")
-l2 =    ("0 1 2 1\n"
-         "1 0 0 2\n"
-         "2 0 2 2")
+# Parameters
+
+propagator_count = 100                                           # number of individuals chosen for propagation to next generation
+offspring_per_propagator = 100                                   # the number of offspring to breed from each propagator
+population_size = propagator_count * offspring_per_propagator   # number of individuals in each generation
+scoring_string_limit = 7                                        # score all strings shorter than this
+
 
 
 random.seed(a=0, version=2)
-automaton = sa.CanonicalMooreMachine.from_string(l2)
+automaton = sa.CanonicalMooreMachine.from_string(Naidoo.RefLanguages[0])
 run = sa.Run(automaton)
 comparison = automaton
 
@@ -38,8 +41,8 @@ display(automaton)
 
 stop = False
 while not stop:
-    i = input("> ")
-    if i == "?":
+    cmd = input("> ")
+    if cmd == "?":
         print('''
         Q - quit
         R - restart current machine
@@ -51,21 +54,25 @@ while not stop:
         X - example - load an example machine, for the regular language (ba)*
         C - set the current machine as the Comparison source for Scoring
         S - score the current machine against the Comparison machine
+        P - population - mutate the current machine into a population of 10, and score each against the Comparison machine
+        V - Evolve - like P, but generates successive generations, spawning from the previous top scorer
+        F - From string:  set the current machine to one read in canonical representation from user input
+        L n - set the current machine to an acceptor for Naidoo's reference language n
         Any other string is fed as input to the machine and the current state's output is displayed.''')
-    elif i == "Q":
+    elif cmd == "Q":
         stop = True
-    elif i == "R":
+    elif cmd == "R":
         run.restart()
-    elif i == "D":
+    elif cmd == "D":
         display(automaton)
-    elif i == "N":
+    elif cmd == "N":
         automaton = sa.CanonicalMooreMachine(1,1)
         run = sa.Run(automaton)
-        display()
-    elif i == "M":
+        display(automaton)
+    elif cmd == "M":
         automaton.mutate()
         display(automaton)
-    elif i == "E":
+    elif cmd == "E":
         # create a generator for all strings from an alphabet, i.e. a Sigma star
         sigma_star = countable.all_words_from_alphabet(range(automaton.max_input + 1))
         for w in sigma_star:
@@ -80,7 +87,7 @@ while not stop:
         # filter that to create the set of strings in the language
         # reset the machine for each run
         # filter Sigma Start through the machine, and count the times it distinguishes the two sets correctly.
-    elif i == "G":
+    elif cmd == "G":
         sigma_star = countable.all_words_from_alphabet(range(automaton.max_input + 1))
         for w in sigma_star:
             run.restart()
@@ -91,17 +98,14 @@ while not stop:
                 print(readable_w)
                 if input("...? ") != "":
                     break
-    elif i == "X":
-        l2 =    ("0 1 2 1\n"
-                 "1 0 0 2\n"
-                 "2 0 2 2")
+    elif cmd == "X":
         automaton = sa.CanonicalMooreMachine.from_string(l2)
         run = sa.Run(automaton)
         display()
-    elif i == "C":
+    elif cmd == "C":
         comparison = automaton.deepcopy()
         print("Comparison set.")
-    elif i == "S":
+    elif cmd == "S":
         # sigma_star = countable.all_words_from_alphabet(range(automaton.max_input + 1))
         # for w in sigma_star:
         #     if len(w) > 3:
@@ -114,13 +118,125 @@ while not stop:
         display(comparison)
         print("Machine being scored:")
         display(automaton)
-        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(4)))
+        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
         print(scorer.reference_dict)
-        s,t = scorer.score(automaton)
-        print("Score: ", s, " out of a possible ", t)
+        s,optimal = scorer.score(automaton)
+        print("Score: ", s, " out of a possible ", optimal)
+    elif cmd == "P":
+        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
+        population = []
+        for cmd in range(population_size):
+            m = automaton.deepcopy()
+            m.mutate()
+            population.append(m)
+        for m in population:
+            s,optimal = scorer.score(m)
+            display(m)
+            print("Score:", s, "of", optimal)
+    elif cmd == "V":
+        scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
+        # Initialise first propagators from the current machine
+        propagators = []
+        for i in range(propagator_count):
+            m = automaton.deepcopy()
+            propagators.append(m)
+        
+        # Loop through generations until user exits
+        for g in itertools.count():
+            print("Generation", g)
+            population = []
+
+            # initialise the new generation from the propagators
+            for p in propagators:
+                population.append(p)    # the propagator survives
+                for j in range(offspring_per_propagator - 1):
+                    # create offspring by mutation
+                    m = p.deepcopy()
+                    m.mutate()
+                    population.append(m)
+
+            # score and select the next propagators
+            # propagators = []
+            # threshold = 0
+
+            population.sort(reverse=True, key=lambda m: scorer.score(m)[0])
+
+            print("Population size:", len(population))
+
+            #for u in population:
+            #    print(scorer.score(u))
+            #    display(u)
+
+            propagators = population[0:propagator_count]
+            #propagators = [population[0]]
+            
+            print(len(propagators))
+
+            print("Best Score:", scorer.score(propagators[0]))
+
+            """
+            for m in population:
+                s,optimal = scorer.score(m)
+                if s == optimal:
+                    print("#######################################################################Perfect score")
+
+                # Threshold Free sl.    Add Update T
+                #   0       0           0   0
+                #   0       1           1   0
+                #   1       0           1   1
+                #   1       1           1   1
+
+                if len(propagators) < propagator_count:
+                    # admit the individual, there is a free propagator slot
+                    propagators.append(m)
+                elif s > threshold:
+                    propagators.append(m)
+                    propagators.sort()
+
+                # Pull the threshold up if it has been exceeded
+                if s > threshold:
+                        threshold = s
+
+                        
+
+
+            best = 0
+            for m in population:
+                s,optimal = scorer.score(m)
+                if s == optimal:
+                    print("#######################################################################Perfect score")
+                if s >= best:   # use a later one of two equally scoring machines, to allow new neutral mutants to replace parents
+                    best = s
+                    propagators = m.deepcopy()
+            print("Selected machine had score", best)
+            """
+
+            cmd = input("<enter> for next generation >")
+            if cmd != "":
+                break
+        automaton = propagators [0]
+        display(automaton)
+    elif cmd == "F":
+        s = ""
+        while True:
+            line = input("state output on_0 on_1 ...:")
+            if line == "":
+                break
+            s = s + line + "\n"
+        automaton = sa.CanonicalMooreMachine.from_string(s)
+        run = sa.Run(automaton)
+        display(automaton)
+
+    elif len(cmd) > 0 and cmd[0] == "L":
+        n = int(cmd[1:])
+        if n < 1 or n > len(Naidoo.RefLanguages):
+            print("No preset machine/language numbered ", n)
+        else:
+            automaton = sa.CanonicalMooreMachine.from_string(Naidoo.RefLanguages[n - 1])
+            run = sa.Run(automaton)
+            display(automaton)
     else:
-        mapped_i = map(lambda x: input_map.index(x),i)
+        mapped_i = map(lambda x: input_map.index(x),cmd)
         run.multistep(mapped_i)
         print("Internal State: ", states_map[run.state])
         print(output_map[run.automaton.outputs[run.state]])
-

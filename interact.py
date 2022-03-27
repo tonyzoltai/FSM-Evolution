@@ -20,6 +20,47 @@ output_map = ["REJECT", "ACCEPT"]
 def display(a):
     a.display(inputs=input_map, states=states_map, outputs=output_map)
 
+def interactive_evolve(automaton, scorer):
+
+    # Initialise the parent of the starting generation
+    parents = [automaton]
+    parent_weights = [1]
+
+    for g in itertools.count():
+        print("Generation", g)
+        population = []
+
+        # initialise the child generation
+        children = []
+        children_weights = []
+
+        # add as many children of weighted-randomly-chosen parents as the population calls for
+        for parent in random.choices(parents, weights=parent_weights, k=population_size):
+            # reproduce the parent
+            child = parent.deepcopy()
+
+            # mutate the child
+            child.mutate()
+
+            # score the child
+            (score, _) = scorer.score(child)
+
+            # add the child to the new generation list
+            children.append(child)
+
+            # accumulate the scores into a weights list
+            children_weights.append(score)
+
+        print("Best Score:", max(children_weights))
+        cmd = input("<enter> for next generation >")
+        if cmd != "":
+            break
+        else:
+            parents = children
+            parent_weights = children_weights
+
+    return children, children_weights
+
 
 # Parameters
 
@@ -54,7 +95,8 @@ while not stop:
         C - set the current machine as the Comparison source for Scoring
         S - score the current machine against the Comparison machine
         P - population - mutate the current machine into a population of 10, and score each against the Comparison machine
-        V - Evolve - like P, but generates successive generations, spawning from the previous top scorer
+        V - Evolve - like P, but generates successive generations; offspring proportional to parent's score
+        A - Arbitrary - like V, but the scoring is against a random set of strings
         F - From string:  set the current machine to one read in canonical representation from user input
         L n - set the current machine to an acceptor for Naidoo's reference language n
         Any other string is fed as input to the machine and the current state's output is displayed.''')
@@ -132,50 +174,59 @@ while not stop:
             s,optimal = scorer.score(m)
             display(m)
             print("Score:", s, "of", optimal)
-    elif cmd == "V":
+    elif cmd == "A":
+        scoring_strings = list(itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
+        max_score = len(scoring_strings)
+        print("Maximal score:", max_score)
+        #create randomised reference ditionary
+        rd = dict()
+        for s in scoring_strings:
+            rd[s] = random.randint(0, 1)
+        
+        scorer = FSMScorer.FSMScorer.from_reference_dict(rd)
+        print(rd)
 
+        children, children_weights = interactive_evolve(automaton, scorer)
+
+        # Set the current machine to be the first child that achieved the best score in the latest generation
+        automaton = max(enumerate(children), key=lambda o: children_weights[o[0]])[1]
+        display(automaton)
+    elif cmd == "V":
         scoring_strings = list(itertools.chain.from_iterable(countable.ND(it,comparison.max_input + 1) for it in range(scoring_string_limit)))
         max_score = len(scoring_strings)
         scorer = FSMScorer.FSMScorer.from_function(sa.Run(comparison).runstring,scoring_strings)
-
         print("Maximal score:", max_score)
 
-        # Initialise the parent of the starting generation
-        parents = [automaton]
-        parent_weights = [1]
+        children, children_weights = interactive_evolve(automaton, scorer)
 
-        for g in itertools.count():
-            print("Generation", g)
-            population = []
+        # Set the current machine to be the first child that achieved the best score in the latest generation
+        automaton = max(enumerate(children), key=lambda o: children_weights[o[0]])[1]
+        display(automaton)
 
-            # initialise the child generation
-            children = []
-            children_weights = []
-
-            # add as many children of weighted-randomly-chosen parents as the population calls for
-            for parent in random.choices(parents, weights=parent_weights, k=population_size):
-                # reproduce the parent
-                child = parent.deepcopy()
-
-                # mutate the child
-                child.mutate()
-
-                # score the child
-                (score, _) = scorer.score(child)
-
-                # add the child to the new generation list
-                children.append(child)
-
-                # accumulate the scores into a weights list
-                children_weights.append(score)
-
-            print("Best Score:", max(children_weights))
-            cmd = input("<enter> for next generation >")
-            if cmd != "":
+    elif cmd == "F":
+        s = ""
+        while True:
+            line = input("state output on_0 on_1 ...:")
+            if line == "":
                 break
-            else:
-                parents = children
-                parent_weights = children_weights
+            s = s + line + "\n"
+        automaton = sa.CanonicalMooreMachine.from_string(s)
+        run = sa.Run(automaton)
+        display(automaton)
+
+    elif len(cmd) > 0 and cmd[0] == "L":
+        n = int(cmd[1:])
+        if n < 1 or n > len(Naidoo.RefLanguages):
+            print("No preset machine/language numbered ", n)
+        else:
+            automaton = sa.CanonicalMooreMachine.from_string(Naidoo.RefLanguages[n - 1])
+            run = sa.Run(automaton)
+            display(automaton)
+    else:
+        mapped_i = map(lambda x: input_map.index(x),cmd)
+        run.multistep(mapped_i)
+        print("Internal State: ", states_map[run.state])
+        print(output_map[run.automaton.outputs[run.state]])
 
 
 
@@ -263,31 +314,3 @@ while not stop:
         #     if cmd != "":
         #         break
         # automaton = propagators [0]
-
-        # Set the current machine to be the first child that achieved the best score in the latest generation
-        automaton = max(enumerate(children), key=lambda o: children_weights[o[0]])[1]
-        display(automaton)
-    elif cmd == "F":
-        s = ""
-        while True:
-            line = input("state output on_0 on_1 ...:")
-            if line == "":
-                break
-            s = s + line + "\n"
-        automaton = sa.CanonicalMooreMachine.from_string(s)
-        run = sa.Run(automaton)
-        display(automaton)
-
-    elif len(cmd) > 0 and cmd[0] == "L":
-        n = int(cmd[1:])
-        if n < 1 or n > len(Naidoo.RefLanguages):
-            print("No preset machine/language numbered ", n)
-        else:
-            automaton = sa.CanonicalMooreMachine.from_string(Naidoo.RefLanguages[n - 1])
-            run = sa.Run(automaton)
-            display(automaton)
-    else:
-        mapped_i = map(lambda x: input_map.index(x),cmd)
-        run.multistep(mapped_i)
-        print("Internal State: ", states_map[run.state])
-        print(output_map[run.automaton.outputs[run.state]])

@@ -55,6 +55,19 @@ class CanonicalSemiAutomaton(object):
             self.transitions[state] = {0:0}
         t = self.transitions[state]
         t[input] = next
+
+    def delete_state(self, state):
+        '''Delete the specific state, replacing all arcs toward it with self-loops.'''
+        # Actually, we replace the state with the highest-numbered one, and decrease max_state.
+        d = state           # the state to be deleted
+        r = self.max_state  # the state to replace it
+
+        for s in self.all_states():
+            for t in self.transitions[s]:
+                
+
+
+
     
     def delta(self, state, input):
         '''Return a stored next state for the pair of state and input, or the default self-loop back to the state itself.'''
@@ -71,6 +84,11 @@ class CanonicalSemiAutomaton(object):
         '''Iterate through the arcs leaving the given state.'''
         for input in range(self.max_input + 1):
             yield (input, self.delta(state, input))
+
+    def all_states(self):
+        '''Iterate through all states of the automaton.'''
+        for s in range(self.max_state + 1):
+            yield s
 
     def __repr__(self) -> str:
         '''Return an unambiguous string representation.'''

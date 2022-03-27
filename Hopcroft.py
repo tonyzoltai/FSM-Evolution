@@ -45,6 +45,7 @@ F = frozenset({2, 3, 4})
 
 # standard imports
 import itertools as it
+import string
 
 # our imports
 import semiautomata as sa
@@ -56,7 +57,7 @@ import utilities as util
 
 # print(semiaut.transitions)
 
-def naive_minimisation(semi_a):
+def old_naive_minimisation(semi_a):
   '''Minimise the partitioned canonical semiautomaton semi_a  equivalent pair states.'''
   # The main data structures are two sets of ordered pairs of states.
   # One set collects all definitely non-equivalent states.
@@ -68,8 +69,7 @@ def naive_minimisation(semi_a):
   # Finally, the still equivalent pairs are merged.
 
   # Create the set of all pairs of states of the SA.
-  # TODO:
-  # 
+
   states = range(semi_a.max_state + 1)
   pairs = set()
   for i in states:
@@ -80,10 +80,10 @@ def naive_minimisation(semi_a):
   non_equivalent = set()
   refined = False
   for i, j in list(pairs):
-    print("first loop ", i, j)
+    # print("first loop ", i, j)
     if semi_a.G(i) != semi_a.G(j):
       # Two states having different outputs cannot be equivalent
-      print(i, j, "different output")
+      # print(i, j, "different output")
       non_equivalent.add((i,j))
       pairs.discard((i,j))
       refined = True
@@ -113,7 +113,14 @@ def naive_minimisation(semi_a):
 
   #pairs = {(i,j) for  in it.product(enumerate(Q), repeat=2) if i < j}
   
+def naive_minimisation(automaton):
+  '''Return a minimised copy of the automaton.'''
+  a = automaton.deepcopy()
 
+  # foRM THE SET OF REACHABLE STATES
+  # remove any state not in the reachable set
+
+  #
 
 
 def Hopcroft_minimisation(Q, Sigma, delta, q0, F):
@@ -161,7 +168,7 @@ import unittest as ut
 
 class TestHopcroft(ut.TestCase):
   def test_One(self):
-    semiaut = sa.CanonicalSemiAutomaton()
+    semiaut = sa.CanonicalMooreMachine()
 
     for state, trans in enumerate(delta):
       for input, next in enumerate(trans):
@@ -170,7 +177,8 @@ class TestHopcroft(ut.TestCase):
     for state in F:
       semiaut.outputs[state] = 1
 
-    util.pit(naive_minimisation(semiaut))
+    # util.pit(naive_minimisation(semiaut))
+    old_naive_minimisation(semiaut).display(string.ascii_lowercase, string.ascii_uppercase, ["REJECT", "ACCEPT"])
 
   def test_Two(self):
     cfa_string = ("0 0 1 5\n"
@@ -181,8 +189,9 @@ class TestHopcroft(ut.TestCase):
                   "5 0 2 6\n"
                   "6 0 6 4\n"
                   "7 0 6 2\n")
-    cfa = sa.CanonicalSemiAutomaton.from_string(cfa_string)
-    util.pit(naive_minimisation(cfa))
+    cfa = sa.CanonicalMooreMachine.from_string(cfa_string)
+    # util.pit(naive_minimisation(cfa))
+    old_naive_minimisation(cfa).display(string.ascii_lowercase, string.ascii_uppercase, ["REJECT", "ACCEPT"])    
 
 if __name__ == '__main__':
   ut.main()

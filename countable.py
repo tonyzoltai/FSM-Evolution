@@ -15,7 +15,7 @@ __copyright__ = "Copyright 2021-2022, Gabor Zoltai"
 __credits__ = ["Gabor Zoltai"]
 __license__ = "GPL"
 __version__ = "0.1"
-__maintainer__ = "Gabor Zoltai"
+__maintainer__ = "Tony Zoltai"
 __email__ = "tony.zoltai@gmail.com"
 __status__ = "Prototype"
 
@@ -43,9 +43,11 @@ def all_concatenations_from_strings(a):
     '''Generate all concatenations of the strings yielded by iterable a.'''
     return map(lambda i: "".join(i), all_words_from_alphabet(a))
 
-        
-#gen = all_concatenations_from_strings({'a','b','c'})
 
-#for i in it.islice(zip(it.count(), gen), 30):
-#    print(i)
+# Replace the following comments with unit tests
+        
+# gen = all_words_from_alphabet({'a','b','c'})
+
+# for i in it.islice(enumerate(gen), 30):
+#     print(i)
 

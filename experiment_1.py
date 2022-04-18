@@ -26,6 +26,7 @@ __status__ = "Prototype"
 MAX_STRING_LENGTH = 6
 INPUT_ALPHABET_SIZE = 2
 GENERATIONS = 100000
+LOG_GENERATIONS = 1000
 
 def dict_score(dictionary, function):
     '''dict_score - compute how well a function does in computing the values from the keys of a dictionary.'''
@@ -34,8 +35,10 @@ def dict_score(dictionary, function):
 from copy import deepcopy
 import itertools
 import random
+import numpy
 from numpy.random import poisson
-import datetime
+import logging
+import optparse
 
 import countable
 import automata
@@ -78,7 +81,7 @@ def repeated_application(f, k):
 def create_scorer():
     scoring_strings = list(itertools.chain.from_iterable(countable.ND(it,INPUT_ALPHABET_SIZE) for it in range(MAX_STRING_LENGTH + 1)))
     max_score = len(scoring_strings)
-    print("Maximal score:", max_score)
+    logging.info("Maximal score: " +str(max_score))
     # create randomised reference dictionary
     rd = dict()
     for s in scoring_strings:
@@ -91,9 +94,17 @@ def complexity_scorer(moore_machine: automata.MooreMachine):
     return -moore_machine.state_count()
 
 
-if __name__ == "__main__":
+def main(options, args):
 
-    print(datetime.datetime.now())
+    #for now, seed both the standard Python and NumPy random generators.  We may go fully NumPy later.
+    random.seed(options.SEED)
+    numpy.random.seed(options.SEED)
+
+    logging.basicConfig(level=getattr(logging, options.LOGLEVEL.upper()),
+                        format="%(asctime)s %(levelname)s: %(message)s")
+    logging.info("Start of run")
+
+
     # Setup
     primitive = automata.CanonicalMooreMachine(input_count=2)
 
@@ -101,12 +112,34 @@ if __name__ == "__main__":
 
     # Run the SMO-GP algorithm for N cycles
     for i, g in enumerate(SMO_GP.SMO_GP({primitive}, repeated_application(mutator, 1 + poisson(1,1)[0]),(fitness_scorer.score, complexity_scorer)).populations()):
-        # print("Generation", i)
-        # print(g)
-        if i >= GENERATIONS:
+        if options.INFOGENS >0 and i % options.INFOGENS == 0:
+            logging.info("Generation " + str(i))
+        if i >= options.GENERATIONS:
             break
 
     # Print the resulting estimate of the Pareto front
-    print(g)
-    print(datetime.datetime.now())
+    for individual, scores in g:
+        logging.info("The following automaton scored %d with %d states:\n%s", scores[0], -scores[1] ,str(individual))
+        print(-scores[1], scores[0], sep=",")
 
+    logging.info("End of run")
+
+
+
+if __name__ == "__main__":
+
+    parser = optparse.OptionParser(("Usage: %prog [OPTION]...\n"
+                                    "Evolve FSMs to recognise a randomised language, using SMO-GP, output pairs of recognition score and FSM size."))
+    parser.add_option("-l", "--log", choices = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+                    action="store", dest="LOGLEVEL", default="DEBUG",
+                    help="set minimum logging level to LOGLEVEL; one of DEBUG, INFO, WARNING, ERROR or CRITICAL (default: %default)")
+    parser.add_option("-g", "--generations", type="int", action="store", dest="GENERATIONS", default=1000,
+                    help="specify the number of generations to run for (default: %default)")
+    parser.add_option("-i", "--inform", type="int", action="store", dest="INFOGENS", default=0,
+                    help="if not zero, produce a message as a sign of life every INFOGENS generations; ignored if logging level is higher than INFO (default: %default)")
+    parser.add_option("-s", "--seed", type="int", action="store", dest="SEED", default=0,
+                    help="specifies the starting seed of the random number generator, so runs are repeatable (default: %default)")
+
+    (options, args) = parser.parse_args()
+
+    main(options, args)

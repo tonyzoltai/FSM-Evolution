@@ -23,10 +23,8 @@ __status__ = "Prototype"
 
 
 # Parameters
-MAX_STRING_LENGTH = 6
 INPUT_ALPHABET_SIZE = 2
-GENERATIONS = 100000
-LOG_GENERATIONS = 1000
+
 
 def dict_score(dictionary, function):
     '''dict_score - compute how well a function does in computing the values from the keys of a dictionary.'''
@@ -78,7 +76,7 @@ def repeated_application(f, k):
     return fun
 
 
-def create_scorer():
+def create_scorer(MAX_STRING_LENGTH):
     scoring_strings = list(itertools.chain.from_iterable(countable.ND(it,INPUT_ALPHABET_SIZE) for it in range(MAX_STRING_LENGTH + 1)))
     max_score = len(scoring_strings)
     logging.info("Maximal score: " +str(max_score))
@@ -108,7 +106,7 @@ def main(options, args):
     # Setup
     primitive = automata.CanonicalMooreMachine(input_count=2)
 
-    fitness_scorer = create_scorer()
+    fitness_scorer = create_scorer(options.MAX_STRING_LENGTH)
 
     # Run the SMO-GP algorithm for N cycles
     for i, g in enumerate(SMO_GP.SMO_GP({primitive}, repeated_application(mutator, 1 + poisson(1,1)[0]),(fitness_scorer.score, complexity_scorer)).populations()):
@@ -139,6 +137,8 @@ if __name__ == "__main__":
                     help="if not zero, produce a message as a sign of life every INFOGENS generations; ignored if logging level is higher than INFO (default: %default)")
     parser.add_option("-s", "--seed", type="int", action="store", dest="SEED", default=0,
                     help="specifies the starting seed of the random number generator, so runs are repeatable (default: %default)")
+    parser.add_option("-m", "--max", type="int", action="store", dest="MAX_STRING_LENGTH", default=6,
+                    help="set the maximum length of strings in the randomised language (default: %default)")
 
     (options, args) = parser.parse_args()
 

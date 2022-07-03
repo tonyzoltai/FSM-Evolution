@@ -14,6 +14,7 @@ Functions:
 '''
 
 import random
+import logging
 from enum import IntEnum, auto
 
 class Dominance(IntEnum):
@@ -45,33 +46,25 @@ def Default_Dominance_Compare(vector_a, vector_b):
         
 
 class SMO_GP:
-    '''The SMO-GP algorithm, packaged as an iterator over generations.  Each generation may add one mutant, which is added, and all individuals whose scores it dominates are deleted.'''
+    '''The SMO-GP algorithm, packaged as an iterator over generations.
+    Each generation may add one mutant, which is added, and all individuals whose scores it dominates are deleted.
+    Before the mutation is dont, the dynamic_change mutator is called in each generation - if it returns true, the environment has chaned and
+    the scores of the population are recomputed.'''
 
-    def __init__(self, initial_individuals, mutator, objectives, dominance_compare=Default_Dominance_Compare) -> None:
+    def __init__(self, initial_individuals, mutator, objectives, dominance_compare=Default_Dominance_Compare,
+                dynamic_change=None) -> None:
         self._mutator = mutator
         self._objectives = objectives
         self._dominance_compare = dominance_compare
+        self._dynamic_change = dynamic_change
         # Create the initial population as a list of pairs of individuals and tuples of their scores on objective fuctions
         self._population = [(i, (*(obj(i) for obj in self._objectives),)) for i in initial_individuals]
 
 
     def populations(self):
         '''Iterator that yields populations, as a list of pairs of (individual, score_vector).  Individuals can be any type, score vectors are iterables whose members can be compared.'''
-        # Yield generation "zero"
-        yield self._population
 
-        while True:
-            # Choose a random individual from the population, ignore its scores
-            parent = random.choice(self._population)[0]
-            # Copy and mutate it into a new individual Y
-            # This assumes that the mutator function makes a deep copy if necessary
-            candidate = self._mutator(parent)
-            candidates_scores = *(obj(candidate) for obj in self._objectives),
-
-            # print("Candidate")
-            # print(candidate)
-            # print(candidates_scores)
-
+        def adjust_population(candidate, candidates_scores):
             # Find out if any individual strongly dominates the candidate; and collect those weakly dominated by it
             dominated_set = set()
             for index, (_, individuals_scores) in enumerate(self._population):
@@ -90,6 +83,30 @@ class SMO_GP:
                 # now add the candidate and its scores
                 new_population.append((candidate, candidates_scores))
                 self._population = new_population
+
+
+        # Yield generation "zero"
+        yield self._population
+
+        while True:
+            # Call the dynamic change function if there is one.
+            while not(self._dynamic_change is None) and next(self._dynamic_change):
+                # Recompute the scores of the whole population, and eliminate weakly dominated individuals.
+                self._population = [(i[0], (*(obj(i[0]) for obj in self._objectives),)) for i in self._population]
+                logging.debug("Recomputed : " + str(self._population))
+
+            # Choose a random individual from the population, ignore its scores
+            parent = random.choice(self._population)[0]
+            # Copy and mutate it into a new individual Y
+            # This assumes that the mutator function makes a deep copy if necessary
+            candidate = self._mutator(parent)
+            candidates_scores = *(obj(candidate) for obj in self._objectives),
+
+            # print("Candidate")
+            # print(candidate)
+            # print(candidates_scores)
+
+            adjust_population(candidate, candidates_scores)
             
             yield self._population
 
@@ -111,6 +128,35 @@ class Test_SMO_GP(ut.TestCase):
             if i>=100:
                 break
         self.assertEqual(gen, [((3, 3, 3), (3, 3, 3))])
+
+    def test_SMO_GP_dynamic(self):
+        self.counter = 0
+
+        def simple_objective(_):
+            return self.counter
+
+        def simple_dynamic():
+            while True:
+                self.counter += 1
+                print("counter", self.counter)
+                #yield true to indicate resetting the scores
+                yield self.counter % 3 == 0
+
+        op = SMO_GP(
+            initial_individuals={(0,0)},
+            mutator=(lambda t: (t[0]+1, t[1]+1)),
+            objectives=(simple_objective, simple_objective),
+            dominance_compare=Default_Dominance_Compare,
+            dynamic_change=simple_dynamic())
+
+        for i, gen in enumerate(op.populations()):
+            print(i, gen)
+            if i>=100:
+                break
+        self.assertEqual(gen, [((100,100),(149,149))])
+
+
+
 
 if __name__ == '__main__':
     ut.main()

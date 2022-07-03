@@ -31,6 +31,19 @@ class FSMScorer(object):
 
         return r
 
+    def table_size(self):
+        '''Returns the number of reference strings.'''
+        return len(self.reference_dict)
+    
+    def ref_and_output(self, n):
+        '''Return the n-th reference string and its output.'''
+        k = list(self.reference_dict.keys())[n]
+        return (k, self.reference_dict[k])
+
+    def set_output(self, s, out):
+        '''Set the expected output for string s to out.'''
+        self.reference_dict[s] = out
+
     def score(self, automaton):
         '''Returns the number of correct results.'''
         count = 0
@@ -54,7 +67,7 @@ class TestCSA(ut.TestCase):
         f = FSMScorer()
         f.reference_dict[()] = []
 
-        self.assertEqual(len(f.reference_dict),1)
+        self.assertEqual(f.table_size(),1)
 
         a = automata.CanonicalMooreMachine.from_string(
             "0 0 1 2\n"
@@ -72,7 +85,16 @@ class TestCSA(ut.TestCase):
             "0 0 1 2\n"
             "1 8 1 2")
         s = f.score(a)
-        self.assertEqual(len(f.reference_dict), 2)
+        self.assertEqual(f.table_size(), 2)
+        self.assertEqual(s, 2)
+
+    def test_direct_access(self):
+        f = FSMScorer.from_reference_dict({():0, (2,):1})
+        p = f.ref_and_output(1)
+        self.assertEqual(p, ((2,),1))
+
+        f.set_output(p[0],2)
+        _,s = f.ref_and_output(1)
         self.assertEqual(s, 2)
 
 

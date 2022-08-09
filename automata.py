@@ -224,12 +224,11 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
 
     
     @classmethod
-    def from_string(cls, s):
-        '''Initialise from a multiline string.  Each line stands for a state starting with 0, and contains an output value and next states, starting from input 0.'''
+    def from_strings(cls, strings):
+        '''Initialise from an iterable of strings.  Each string stands for a state (starting with 0), and contains an output value and next states, starting from input 0.'''
         #Create the Canonical Moore Machine.
         mm = cls()
-        # Split the string into lines.
-        for state, line in enumerate(s.splitlines()):
+        for state, line in enumerate(strings):
             if state >= mm.state_count():
                 mm.add_state()
             a = list(map(int,line.split()))
@@ -237,6 +236,12 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
             for symbol, next in enumerate(a[1:]):
                 mm.set_arc(state, symbol, next)
         return mm
+
+
+    @classmethod
+    def from_string(cls, s):
+        '''Initialise from a multiline string.  Each line stands for a state (starting with 0), and contains an output value and next states, starting from input 0.'''
+        return cls.from_strings(s.splitlines())
 
 class MooreMachineRun(object):
     '''A Moore Machine in action.'''

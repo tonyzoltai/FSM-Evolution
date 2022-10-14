@@ -14,6 +14,8 @@ class FSMScorer(object):
 
     def __init__(self) -> None:
         self.reference_dict = dict()
+        # initialise the cache
+        self.cache = dict()
 
 
     @classmethod
@@ -43,18 +45,28 @@ class FSMScorer(object):
     def set_output(self, s, out):
         '''Set the expected output for string s to out.'''
         self.reference_dict[s] = out
+        # This has modified at least one string/output pair, therefore reset the cache
+        self.cache = dict()
 
     def score(self, automaton):
         '''Returns the number of correct results.'''
-        count = 0
-        run = automata.MooreMachineRun(automaton)
-        for w in self.reference_dict.keys():
-            run.multistep(w)
-            output = run.output()
+        #First, check if the automaton's score is cached
+        h = str(automaton)
+        if h in self.cache:
+            return self.cache[h]
+        else:
+            # not cached, compute value, cache it and return it
+            count = 0
+            run = automata.MooreMachineRun(automaton)
+            for w in self.reference_dict.keys():
+                run.multistep(w)
+                output = run.output()
 
-            if output == self.reference_dict[w]:
-                count += 1
-        return count
+                if output == self.reference_dict[w]:
+                    count += 1
+            # cache before returning
+            self.cache[h] = count
+            return count
 
 # Unit testing code.
 
@@ -68,6 +80,7 @@ class TestCSA(ut.TestCase):
         f.reference_dict[()] = []
 
         self.assertEqual(f.table_size(),1)
+        self.assertEqual(len(f.cache), 0)
 
         a = automata.CanonicalMooreMachine.from_string(
             "0 0 1 2\n"
@@ -76,6 +89,8 @@ class TestCSA(ut.TestCase):
         s = f.score(a)
 
         self.assertEqual(s, 0)
+        self.assertTrue(str(a) in f.cache)
+        self.assertFalse("" in f.cache)
 
     
     def test_from_reference_dict(self):
@@ -87,6 +102,12 @@ class TestCSA(ut.TestCase):
         s = f.score(a)
         self.assertEqual(f.table_size(), 2)
         self.assertEqual(s, 2)
+        a = automata.CanonicalMooreMachine.from_string(
+            "0 1 1 2\n"
+            "0 0 1 2\n"
+            "1 8 1 2")
+        s = f.score(a)
+        self.assertEqual(len(f.cache), 2)
 
     def test_direct_access(self):
         f = FSMScorer.from_reference_dict({():0, (2,):1})
@@ -120,6 +141,8 @@ class TestCSA(ut.TestCase):
         s = f.score(a)
         self.assertEqual(len(f.reference_dict), 3)
         self.assertEqual(s, 2)
+        self.assertEqual(len(f.cache), 1)
+        self.assertTrue(str(a) in f.cache)
 
 
 if __name__ == '__main__':

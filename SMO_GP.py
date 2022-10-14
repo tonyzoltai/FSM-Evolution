@@ -13,7 +13,7 @@ Functions:
     Default_Dominance_Compare - given two score vectors assumed to have the same length, returns a Dominance value based on the usual comparison operators.
 '''
 
-import random
+import numpy as np
 import logging
 from enum import IntEnum, auto
 
@@ -96,7 +96,8 @@ class SMO_GP:
                 logging.debug("Recomputed : " + str(self._population))
 
             # Choose a random individual from the population, ignore its scores
-            parent = random.choice(self._population)[0]
+            #parent = random.choice(self._population)[0]
+            parent = self._population[np.random.choice(len(self._population))][0]
             # Copy and mutate it into a new individual Y
             # This assumes that the mutator function makes a deep copy if necessary
             candidate = self._mutator(parent)
@@ -120,9 +121,9 @@ import unittest as ut
 
 class Test_SMO_GP(ut.TestCase):
     def test_SMO_GP(self):
-        random.seed(0)
+        np.random.seed(0)
         op = SMO_GP({(0 ,0, 0)},
-            (lambda t: ((t[0]+random.randint(0,3))%4, (t[1]+random.randint(0,3))%4, (t[2]+random.randint(0,3))%4)),
+            (lambda t: ((t[0]+np.random.randint(0,4))%4, (t[1]+np.random.randint(0,4))%4, (t[2]+np.random.randint(0,4))%4)),
             ((lambda v: v[0]),(lambda v: v[1]),(lambda v: v[2])))
         for i, gen in enumerate(op.populations()):
             if i>=100:

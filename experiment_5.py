@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 
 '''
-experiment_4 - Compute a quasi-Pareto front on best prediction and smallest size in states, for FSM solutions evolving to
-                recognise a changing random subset of a constant regular language.
-                Different from "experiment_3" by using a regular language rather than ever-changing white noise as the global environment,
-                of which the active subset is applied in selection.
+experiment_5 - Compute a quasi-Pareto front on best prediction and smallest size in states, for FSM solutions evolving to
+                recognise progressively more complex members of a family of languages, the "Universal Witness" languages of Brzozowski.
+                (See uniwitness.py for reference.)
 
 Classes:
     None.
 
 Functions:
-    mutator - mutation operator for Moore Machines.  May add a new state, and will set a random transition arc, and will change the ouput of a random state to a random value.
+    complexophile_mutator - mutation operator for Moore Machines.  Sets a random transition arc, half the time to a new state (hence "complexophile"),
+    and changes the ouput of a random state to a random value.
 
 '''
 
@@ -25,25 +25,22 @@ __status__ = "Prototype"
 
 
 # Parameters
-INPUT_ALPHABET_SIZE = 2
+INPUT_ALPHABET_SIZE = 3 # The Universal Witness languages use a three-symbol alphabet.
 
 
-
-# from experiment_3 import *
 
 from copy import deepcopy
-import itertools
-import random
+
 import numpy
 from numpy.random import poisson
 import logging
 import optparse
 
-import NaidooRefLanguages
-import countable
 import automata
 import FSMScorer
 import SMO_GP
+from uniwitness import UniWitness
+import countable
 
 def complexophile_mutator(mm_parent: automata.CanonicalMooreMachine):
 
@@ -97,68 +94,65 @@ def randomly_repeated_application(f, k):
     
     return fun
 
-class E4Scorer(FSMScorer.FSMScorer):
+class E5Scorer(FSMScorer.FSMScorer):
     '''A scorer for FSMs that uses a reference dictionary based on a changing subset of a regular language.'''
     def __init__(self, n, cmm) -> None:
-        '''Create an FSMScorer of n strings that are branches of a binary tree from the empty string, being positive or negative examples of the language of the Canonical Moore Machine cmm.'''
+        '''Create an FSMScorer of n strings.  These should be balanced between positive and negative examples
+            for the language of the CanonicalMooreMachine cmm.  If the scoring table were not balanced, e.g.
+            mostly negative examples, simple FSMs that just reject everything would be inappropriately favoured.'''
         super().__init__()
-        self.keylist = [()]
-        self.mr = automata.MooreMachineRun(cmm)
-        self.mr.multistep(self.keylist[0])
-        self.reference_dict = {self.keylist[0]: self.mr.output()}
-        for _ in range(n-1):
-            self.extend()
-    
-    def extend(self):
-        while True:
-            parent = self.keylist[numpy.random.choice(len(self.keylist))]
-            child = parent + (numpy.random.choice(2),)
-            if not(child in self.keylist):
-                break
-        self.keylist.append(child)
 
-        self.mr.reset()
-        self.mr.multistep(child)
-        self.reference_dict[child] = self.mr.output()
+        d = dict()
+        mr = automata.MooreMachineRun(cmm)
+        positive = 0
+        negative = 0
 
-    def reduce(self):
-        index = numpy.random.choice(len(self.keylist))
-        key = self.keylist[index]
-        self.keylist.pop(index)
-        self.reference_dict.pop(key)
+        for s in countable.all_words_from_alphabet(range(3)):
+            mr.reset()
+            mr.multistep(s)
+            result = mr.output()
+            #print(s, "result: ", result, "pos: ", positive, "neg: ", negative)
+            if (positive >= negative and result == 0) \
+            or (positive <= negative and result == 1):
+                d[s] = result
+                if result == 1:
+                    positive += 1
+                else:
+                    negative += 1
+                if positive + negative >= n:
+                    break
+        self.reference_dict = d
 
 def create_scorer(table_size, cmm):
 
     logging.info("Maximal score: " + str(table_size))
 
-    return E4Scorer(table_size, cmm)
+    return E5Scorer(table_size, cmm)
 
 def complexity_scorer(moore_machine: automata.MooreMachine):
     '''Returns an integer score for the complexity of a given Moore machine.  The lower the number of states, the higher the score.'''
     return -moore_machine.state_count()
 
-def dynamic_change(fitness_scorer: E4Scorer, change_per_gen):
-    '''Generator to periodically change the given fitness scorer, depending on the number of changes per generation (float).'''
+# def dynamic_change(fitness_scorer: E5Scorer, change_per_gen):
+#     '''Generator to periodically change the given fitness scorer, depending on the number of changes per generation (float).'''
 
-    change = 0
-    while True:
-        change += change_per_gen
-        # recalc = False
-        while change >= 1:
-            #recalc = True
-            change -= 1
+#     change = 0
+#     while True:
+#         change += change_per_gen
+#         # recalc = False
+#         while change >= 1:
+#             #recalc = True
+#             change -= 1
 
-            fitness_scorer.reduce()
-            fitness_scorer.extend()
-            yield True
+#             fitness_scorer.reduce()
+#             fitness_scorer.extend()
+#             yield True
 
-        #yield recalc
-        yield False
+#         #yield recalc
+#         yield False
 
 def main(options, args):
 
-    #for now, seed both the standard Python and NumPy random generators.  We may go fully NumPy later.
-    random.seed(options.SEED)
     numpy.random.seed(options.SEED)
 
     logging.basicConfig(level=getattr(logging, options.LOGLEVEL.upper()),
@@ -167,10 +161,10 @@ def main(options, args):
 
 
     # Setup
-    primitive = automata.CanonicalMooreMachine(input_count=2)
+    primitive = automata.CanonicalMooreMachine(input_count=INPUT_ALPHABET_SIZE)
 
-    fitness_scorer = create_scorer(options.DICTSIZE, automata.CanonicalMooreMachine.from_string(NaidooRefLanguages.LX))
-    logging.info("Longest scoring string: " + str(max([len(s) for s in fitness_scorer.keylist])))
+    fitness_scorer = create_scorer(options.DICTSIZE, UniWitness(options.UNIWITNESS))
+    logging.info("Longest scoring string: " + str(max([len(s) for s in fitness_scorer.reference_dict.keys()])))
 
     change_per_gen = options.CHANGE / 100 * fitness_scorer.table_size()
 
@@ -180,7 +174,7 @@ def main(options, args):
                     initial_individuals={primitive},
                     mutator=poisson_repeat(complexophile_mutator, 1.0),
                     objectives=(fitness_scorer.score, complexity_scorer),
-                    dynamic_change=dynamic_change(fitness_scorer, change_per_gen)
+                    dynamic_change=None
                 ).populations()):
 
         if options.INFOGENS >0 and i % options.INFOGENS == 0:
@@ -190,9 +184,9 @@ def main(options, args):
 
     # Print the scoring dictionary
     logging.debug("Scoring table:")
-    longest = max([len(s) for s in fitness_scorer.keylist])
+    longest = max([len(s) for s in fitness_scorer.reference_dict.keys()])
     for length in range(longest + 1):
-        for s in [ x for x in fitness_scorer.keylist if len(x) == length]:
+        for s in [ x for x in fitness_scorer.reference_dict.keys() if len(x) == length]:
                 logging.debug("%s %s", s, fitness_scorer.reference_dict[s])
 
     # Print the resulting estimate of the Pareto front
@@ -217,12 +211,11 @@ def myAssertEqual(a,b):
         print(b)
 
 def selfTest():
-        e = E3Scorer(15)
-        myAssertEqual(15, len(e.keylist))
-        myAssertEqual(15, len(e.reference_dict.keys()))
-        e.reduce()
-        e.reduce()
-        myAssertEqual(13, len(e.reference_dict.keys()))
+        e = E5Scorer(100,UniWitness(3))
+        myAssertEqual(100, len(e.reference_dict.keys()))
+        pos = len([s for s in e.reference_dict if e.reference_dict[s] == 1])
+        myAssertEqual(pos, 50)
+        myAssertEqual(e.reference_dict[0,0,1], 1)
 
 
 if __name__ == "__main__":
@@ -244,6 +237,8 @@ if __name__ == "__main__":
                     help="percentage of fitness reference table to change per generation (default: %default)")
     parser.add_option("-t", "--test", action="store_true", dest="SELFTEST",
                     help="executes a self test")
+    parser.add_option("-u", "--uniwitness", type="int", action="store", dest="UNIWITNESS", default=3,
+                    help="sets the number of the Universal Witness language to use at start (default: %default)")
 
     (options, args) = parser.parse_args()
 

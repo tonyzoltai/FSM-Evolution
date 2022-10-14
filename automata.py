@@ -26,6 +26,9 @@ __status__ = "Prototype"
 
 
 
+import itertools
+
+
 class SemiAutomaton(object):
     '''A not-quite abstract class to ground the capabilities of semiautomata, FSMs/DFAs, Moore machines, Pushdown automata, etc.'''
 
@@ -176,6 +179,76 @@ class MooreMachine(FiniteSemiAutomaton):
         '''Return the set of outputs from all states.  (Note - runs in proportional time to number of states.)'''
         return {self.output(s) for s in self.states()}
 
+    def strings_producing_output(self, o):
+        '''Generates all the strings that result in a given output.  Can be used to generate the language of a DFA.'''
+
+        # maintain a list of all the strings of a given length paired with the set of states from which they reach
+        #   a state of the given output
+        # for each string, if the starting state is a member of their "reaching output" set, output the string
+        # To go to the next cycle, replace each string with all strings obtained by prepending an alphabet symbol,
+        #   and gather the corresponding states
+
+        # initialise the strings structure
+        cur_str = ()
+        string_states = {cur_str:set()}
+        for state in self.states():
+            if self.output(state) == o:
+                string_states[cur_str].add(state)
+                if state == self.starting_state():
+                    yield cur_str
+
+        # Loop conceptually forever (practically until the generator is invoked for the last time)
+        while True:
+            # initialise the next dict of strings and corresponding states
+            new_string_states = dict()
+            # Extend each string in the current dict by one preceding symbol
+            for cur_str in string_states:
+                # Use all symbols of the alphabet
+                for symbol in self.inputs():
+                    new_str = (symbol, ) + cur_str
+                    new_string_states[new_str] = set()
+                    # Scan all states whether they move to an in-set state on this symbol
+                    for prev_state in self.states():
+                        if self.next_state(prev_state,symbol) in string_states[cur_str]:
+                            new_string_states[new_str].add(prev_state)
+                            if prev_state == self.starting_state():
+                                yield new_str
+            string_states = new_string_states
+
+
+        # maintain the set of strings for each reachable state that go from that state to one with the given output
+        # cycle up in string lengths, extending the sets of strings
+        # yield strings that have reached back to the starting state
+
+        # suffixes_toward_output = dict()
+        # suffix = ()
+        # for s in self.states():
+        #     if self.reachable(self.starting_state(),s):
+        #         if self.output(s) == o:
+        #             suffixes_toward_output[s] = [ suffix ]
+        #             if s == self.starting_state():
+        #                 yield suffix
+        #         else:
+        #             suffixes_toward_output[s] = []
+
+        # while True:
+        #     input("cycle:")
+        #     for state in list(suffixes_toward_output.keys()):
+        #         print("state", s)
+        #         for suffix in list(suffixes_toward_output[state]):
+        #             print("suffix", suffix)
+        #             # Extend each string back by one symbol and assign it to the correct state, and yield it if that is the start state.
+        #             for prev_state in list(suffixes_toward_output):
+        #                 print("prev_state", prev_state)
+        #                 for symbol in self.inputs():
+        #                     print("symbol", symbol)
+        #                     if self.next_state(prev_state,symbol) == state:
+        #                         new_suffix = (symbol,) + suffix
+        #                         suffixes_toward_output[prev_state].append(new_suffix)
+        #                         if prev_state == self.starting_state():
+        #                             yield new_suffix
+
+
 class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
     '''The canonical version of the Moore Machine has integers for outputs, and state 0 is always the starting state.'''
 
@@ -221,7 +294,6 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
         # i.e. the output alphabet is from zero up to and including the highest output value.
         if output >= self._output_count:
             self._output_count = output + 1
-
     
     @classmethod
     def from_strings(cls, strings):
@@ -233,6 +305,11 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
                 mm.add_state()
             a = list(map(int,line.split()))
             mm.set_output(state, a[0])
+
+            #if there are more symbols here than we had before, then extend the set of inputs
+            if len(a) - 1 > mm.input_count():
+                mm._input_count = len(a) - 1
+
             for symbol, next in enumerate(a[1:]):
                 mm.set_arc(state, symbol, next)
         return mm
@@ -242,6 +319,119 @@ class CanonicalMooreMachine(CanonicalSemiAutomaton, MooreMachine):
     def from_string(cls, s):
         '''Initialise from a multiline string.  Each line stands for a state (starting with 0), and contains an output value and next states, starting from input 0.'''
         return cls.from_strings(s.splitlines())
+
+    def minimised(self):
+        '''Returns a newly constructed CanonicalMooreMachine that is the minimal equivalent of self.'''
+        # Compile a map of the states according to their outputs as the initial potential 
+        Map = [self.output(q) for q in self.states()]
+        print("Map", Map)
+        next_mapping = len(self.outputs_used())
+        print("next mapping", next_mapping)
+
+        # Iterate until we find no more splitting of groups
+        Split = True
+        while Split:
+            Split = False
+            print("looking for splits")
+            # Go through the groups of states according to the current map
+            for group in [[s for s in self.states() if Map[s] == m] for m in set(Map)]:
+                print("now processing group", group)
+                # Compile the signatures of the states in the group, i.e. what groups they transition to by symbol
+                Subgroups = dict()
+                for state in group:
+
+                    signature = tuple([Map[self.next_state(state, symbol)] for symbol in self.inputs()])
+
+                    # if we don't already have this in Subgroups, add it as a dict key, with the state as a value
+                    if signature in Subgroups:
+                        Subgroups[signature].add(state)
+                    else:
+                        Subgroups[signature] = {state}
+
+                    print("state", state, "with signature", signature, "is grouped in", Subgroups[signature])
+                
+                # If the group has split into more than one, mark the splitting states
+                Splits = list(Subgroups.values())[1:]
+                if len(Splits) > 0:
+                    Split = True
+                    for newgroup in Splits:
+                        for state in newgroup:
+                            Map[state] = next_mapping
+                        next_mapping += 1
+                print("Map", Map)
+
+
+                print("===")
+
+        r = CanonicalMooreMachine(next_mapping, self.input_count(), self.output_count())
+        processed = set()
+        for state, new_state in enumerate(Map):
+            if new_state not in processed:
+                r.set_output(new_state, self.output(state))
+                for symbol in self.inputs():
+                    r.set_arc(new_state, symbol, Map[self.next_state(state, symbol)])
+                processed.add(new_state)
+
+        print(r)
+        return r
+
+
+        # Partition = [set([q for q in self.states() if self.output(q) == symbol]) for symbol in self.outputs()]
+        # print(Partition)
+
+        # # NextPartition will be built up by successively refining.
+        # NextPartition = []
+
+        # # Go through the groups in the partition
+        # for p in Partition:
+        #     # Sub-partition the group by 
+
+
+
+        # Suppose there is a DFA D < Q, Σ, q0, δ, F > which recognizes a language L. Then the minimized DFA D < Q’, Σ, q0, δ’, F’ > can be constructed for language L as: 
+        # Step 1: We will divide Q (set of states) into two sets. One set will contain all final states and other set will contain non-final states. This partition is called P0. 
+        #
+        # A partition is a list of sets.  There may be several sets with the same output, but we start with a partition by output.
+        # we need to have a unique ID values for a set in a partition.  We also need a way to find this ID value for a given state in a given partition.
+
+        # def part_index(state, partition):
+        #     for i in range(len(partition)):
+        #         if state in partition[i]:
+        #             return i
+        #     else:
+        #         raise ValueError("State not found in partition.")
+
+        # Partition = [set() for symbol in self.outputs()]
+        # for q in self.states():
+        #     Partition[self.output(q)].add(q)
+        
+        # print(Partition)
+
+        # PreviousPartition = Partition
+        # # Step 2: Initialize k = 1 
+        # # Step 3: Find Pk by partitioning the different sets of Pk-1.
+
+        # # In each set of Pk-1, we will take all possible pair of states. If two states of a set are distinguishable, we will split the sets into different sets in Pk.
+        # for index, s in enumerate(PreviousPartition):
+        #     for qi, qj in [ (qi,qj) for qi in s for qj in s if qj < qi]:
+        #         print(qi, qj)
+        #         # How to find whether two states in partition Pk are distinguishable ? 
+        #         # Two states ( qi, qj ) are distinguishable in partition Pk if for any input symbol a, δ ( qi, a ) and δ ( qj, a ) are in different sets in partition Pk-1. 
+        #         distinct = False
+        #         for a in self.inputs():
+        #             if part_index(self.next_state(qi, a), PreviousPartition) != part_index(self.next_state(qj, a), PreviousPartition):
+        #                 # qi and qj go to groups in the partition that are already known to be different.
+        #                 distinct = True
+        #                 break
+        #         if distinct:
+
+
+
+
+        # Step 4: Stop when Pk = Pk-1 (No change in partition) 
+        # Step 5: All states of one set are merged into one. No. of states in minimized DFA will be equal to no. of sets in Pk. 
+
+
 
 class MooreMachineRun(object):
     '''A Moore Machine in action.'''
@@ -362,6 +552,20 @@ class TestSemiAutomata(ut.TestCase):
         mr.reset()
         self.assertEqual(mr.output(), 65)
 
+    def test_generate_language(self):
+        mm = CanonicalMooreMachine.from_string(
+            (
+                "0 1 1 0\n"
+                "0 3 0 1\n"
+                "1 0 3 0\n"
+                "1 0 3 0"
+            ))
+        for i, s in enumerate(mm.strings_producing_output(1)):
+            if i == 24:
+                self.assertEqual(s, (0, 0, 0, 0, 0))
+                break
+
+
     def test_CanonicalMooreMachine(self):
         cmm = CanonicalMooreMachine.from_string(("1 2 1\n"
          "0 0 2\n"
@@ -377,6 +581,18 @@ class TestSemiAutomata(ut.TestCase):
 
         cmm.set_output(2, 1)
         self.assertEqual(cmm.output(2), 1)
+
+    def test_minimise(self):
+        cmm = CanonicalMooreMachine.from_string(
+        ("0 1 2 3\n"
+         "1 2 1 3\n"
+         "1 1 2 3\n"
+         "1 3 3 3\n"
+         "0 3 3 3\n"
+         "0 6 6 5\n"
+         "1 5 5 6"))
+        cmm2 = cmm.minimised()
+
 
 
 

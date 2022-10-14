@@ -120,7 +120,12 @@ def naive_minimisation(automaton):
   # foRM THE SET OF REACHABLE STATES
   # remove any state not in the reachable set
 
-  #
+  # create a set of groups of states with the same output
+
+  # for each group:
+  #   
+  #   for each pair of states in the group:
+  #     if the two move to different groups on the same symbol, 
 
 
 def Hopcroft_minimisation(Q, Sigma, delta, q0, F):

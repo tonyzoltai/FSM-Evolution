@@ -7,6 +7,8 @@ FSMScorer - A class to assign scores to FSMs based on how well they classify str
 
 '''
 
+import logging
+
 import automata
 
 class FSMScorer(object):
@@ -53,19 +55,25 @@ class FSMScorer(object):
         #First, check if the automaton's score is cached
         h = str(automaton)
         if h in self.cache:
+            logging.debug("CACHED score" + str(self.cache[h]))
             return self.cache[h]
         else:
             # not cached, compute value, cache it and return it
             count = 0
             run = automata.MooreMachineRun(automaton)
             for w in self.reference_dict.keys():
+                run.reset()
                 run.multistep(w)
                 output = run.output()
+                logging.debug("For input " + str(w) + " the output is " + str(output))
 
                 if output == self.reference_dict[w]:
                     count += 1
             # cache before returning
             self.cache[h] = count
+            logging.debug("Score is " + str(count))
+            if count == len(self.reference_dict):
+                logging.info("Maximal score reached.")
             return count
 
 # Unit testing code.

@@ -162,6 +162,7 @@ def main(options, args):
 
     # Setup
     primitive = automata.CanonicalMooreMachine(input_count=INPUT_ALPHABET_SIZE)
+    # primitive  = UniWitness(3)
 
     fitness_scorer = create_scorer(options.DICTSIZE, UniWitness(options.UNIWITNESS))
     logging.info("Longest scoring string: " + str(max([len(s) for s in fitness_scorer.reference_dict.keys()])))

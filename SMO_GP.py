@@ -86,6 +86,7 @@ class SMO_GP:
 
 
         # Yield generation "zero"
+        logging.debug("Yielding population:\n" + str(self._population))
         yield self._population
 
         while True:
@@ -103,12 +104,12 @@ class SMO_GP:
             candidate = self._mutator(parent)
             candidates_scores = *(obj(candidate) for obj in self._objectives),
 
-            # print("Candidate")
-            # print(candidate)
-            # print(candidates_scores)
+            logging.debug("Candidate :\n" + str(candidate))
+            logging.debug(candidates_scores)
 
             adjust_population(candidate, candidates_scores)
             
+            logging.debug("Yielding population:\n" + str(self._population))
             yield self._population
 
 

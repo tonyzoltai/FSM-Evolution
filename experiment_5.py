@@ -161,8 +161,10 @@ def main(options, args):
 
 
     # Setup
-    primitive = automata.CanonicalMooreMachine(input_count=INPUT_ALPHABET_SIZE)
-    # primitive  = UniWitness(3)
+    if options.BEGINNING == 0:
+        primitive = automata.CanonicalMooreMachine(input_count=INPUT_ALPHABET_SIZE)
+    else:
+        primitive  = UniWitness(options.BEGINNING)
 
     fitness_scorer = create_scorer(options.DICTSIZE, UniWitness(options.UNIWITNESS))
     logging.info("Longest scoring string: " + str(max([len(s) for s in fitness_scorer.reference_dict.keys()])))
@@ -240,6 +242,8 @@ if __name__ == "__main__":
                     help="executes a self test")
     parser.add_option("-u", "--uniwitness", type="int", action="store", dest="UNIWITNESS", default=3,
                     help="sets the number of the Universal Witness language to use at start (default: %default)")
+    parser.add_option("-b", "--beginning", type="int", action="store", dest="BEGINNING", default=0,
+                    help="sets the initial population to the given parameter's corresponding Universal Witness automaton (>=3)")
 
     (options, args) = parser.parse_args()
 

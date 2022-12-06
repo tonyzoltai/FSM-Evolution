@@ -48,6 +48,9 @@ class FSMScorer(object):
         '''Set the expected output for string s to out.'''
         self.reference_dict[s] = out
         # This has modified at least one string/output pair, therefore reset the cache
+        self.reset()
+    
+    def reset(self):
         self.cache = dict()
 
     def score(self, automaton):

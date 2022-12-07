@@ -185,7 +185,7 @@ def main(options, args):
 
     output_generation = [(primitive, [0, 0])]
 
-    for u in range(3, options.LASTUNIWITNESS + 1):
+    for u in range(options.UNIWITNESS, options.LASTUNIWITNESS + 1):
         fitness_scorer = create_scorer(options.DICTSIZE, u)
         logging.info("Target: U(" + str(u) + "); Longest scoring string: " + str(max([len(s) for s in fitness_scorer.reference_dict.keys()])))
 
